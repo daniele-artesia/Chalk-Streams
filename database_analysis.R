@@ -21,6 +21,7 @@ rm(pw) # removes the password
 
 # check for a table
 dbExistsTable(con, "determinands_effluents")
+dbExistsTable(con, "ep_incidents")
 # TRUE
 
 #lowercase names in table and columns
@@ -30,6 +31,18 @@ dbSafeNames = function(names) {
   names = gsub('.','_',names, fixed=TRUE)
   names
 }
+
+#############################load table and put all columns to lowercase#############################################################
+determinands <- as.data.frame(dbGetQuery(con, "SELECT * FROM determinands"))
+effluents <- as.data.frame(dbGetQuery(con, "SELECT * FROM effluents"))
+incidents <- as.data.frame(dbGetQuery(con, "SELECT * FROM ep_incidents"))
+pollutant <- as.data.colnames(incidents) <- dbSafeNames(colnames(incidents))colnames(incidents) <- dbSafeNames(colnames(incidents))frame(dbGetQuery(con, "SELECT * FROM ep_pollutant"))
+
+colnames(incidents) <- dbSafeNames(colnames(incidents))
+colnames(pollutant) <- dbSafeNames(colnames(pollutant))
+colnames(determinands) <- dbSafeNames(colnames(determinands))
+colnames(effluents) <- dbSafeNames(colnames(effluents))
+
 
 #############################load determinands and effluents tables and merge on common columns#############################################
 determinands <- dbGetQuery(con, "SELECT * FROM determinands")
