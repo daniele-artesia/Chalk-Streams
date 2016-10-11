@@ -3,6 +3,7 @@ require("RPostgreSQL")
 require(dplyr)
 require(reshape2)
 require(ggplot2)
+require(lubridate)
 
 # create a connection
 # save the password that we can "hide" it as best as we can by collapsing it
@@ -36,21 +37,20 @@ dbSafeNames = function(names) {
 determinands <- as.data.frame(dbGetQuery(con, "SELECT * FROM determinands"))
 effluents <- as.data.frame(dbGetQuery(con, "SELECT * FROM effluents"))
 incidents <- as.data.frame(dbGetQuery(con, "SELECT * FROM ep_incidents"))
-pollutant <- as.data.colnames(incidents) <- dbSafeNames(colnames(incidents))colnames(incidents) <- dbSafeNames(colnames(incidents))frame(dbGetQuery(con, "SELECT * FROM ep_pollutant"))
-
+pollutant <- as.data.frame(dbGetQuery(con, "SELECT * FROM ep_pollutant"))
+ngr.coord <- as.data.frame(dbGetQuery(con, "SELECT * FROM ngr_coord"))
+  
 colnames(incidents) <- dbSafeNames(colnames(incidents))
 colnames(pollutant) <- dbSafeNames(colnames(pollutant))
 colnames(determinands) <- dbSafeNames(colnames(determinands))
 colnames(effluents) <- dbSafeNames(colnames(effluents))
+colnames(ngr.coord) <- dbSafeNames(colnames(ngr.coord))
 
 
 #############################load determinands and effluents tables and merge on common columns#############################################
-determinands <- dbGetQuery(con, "SELECT * FROM determinands")
-effluents <- dbGetQuery(con, "SELECT * FROM effluents")
-
 length(effluents$PERMIT_REF) == length(unique(effluents$PERMIT_REF)) 
 
-disch_det <- merge(determinands, effluents, by = c("PERMIT_REF", "VERSION","EFFLUENT_NUMBER"))
+disch_det <- merge(determinands, effluents, by = c("permit_ref", "version","effluent_number"))
 disch_det <- disch_det[, - c(19:21)]
 disch_det$MONTH_FROM <-as.numeric(disch_det$MONTH_FROM)
 disch_det$MONTH_TO <- as.numeric(disch_det$MONTH_TO)
@@ -59,17 +59,16 @@ disch_det$month_span <- disch_det$MONTH_TO - disch_det$MONTH_FROM
 colnames(disch_det) <- dbSafeNames(colnames(disch_det))
 
 # write table to database
-dbWriteTable(con,'determinands_effluents',disch_det, row.names=FALSE)
+dbWriteTable(con,'effluents_with_determinands',disch_det, row.names=FALSE)
 
 
 #############################load consented discharge and  effluents #####################################################################
-disch_det <- dbGetQuery(con, "SELECT * FROM determinands_effluents")
+#disch_det <- dbGetQuery(con, "SELECT * FROM effluents_with_determinands")
 
 #select just septic tanks
 descriptor_tmen <- disch_det %>%
    tbl_df() %>%
    select(permit_ref, region_x, tmen_desc)
-
 descriptor_tmen <- unique(descriptor_tmen)
 
 descriptor_tmen$tmen_desc <- as.factor(descriptor_tmen$tmen_desc)
@@ -89,4 +88,45 @@ ggplot(data = septictank,aes(x=region_x, fill = region_x))+
   labs(fill = "") + xlab("")
 dev.off()
 
-#
+######################### load incidents and pollutant ############################################################################
+#merge and subset per SEwage
+pollution.incidents <- merge(incidents,pollutant, all.x = T)
+sewage.incidents <- subset(pollution.incidents, grepl("Sew",poll_type) & !grepl("Wales", region_wm))
+
+png(filename = "T:/Proposals/WWF Polution & Chalk Streams/output plot/sewage incidents.png",width=1920,height=1080,res=150)
+ggplot(data = sewage.incidents,aes(x=region_wm, fill = region_wm))+
+  geom_bar(colour="black") +
+  geom_text(stat='count',aes(label=..count..),vjust=-1, size = 3) +
+  scale_x_discrete(breaks = 1:31)+
+  theme(legend.position="bottom" ) +
+  facet_wrap(~eil_water,ncol = 4) +
+  labs(fill = "") + xlab("")
+dev.off()
+
+#by year
+sewage.incidents$year <- as.numeric(format(sewage.incidents$not_date,"%Y"))
+
+png(filename = "T:/Proposals/WWF Polution & Chalk Streams/output plot/sewage incidents by year.png",width=1920,height=1080,res=150)
+ggplot(data = sewage.incidents,aes(x=eil_water, fill = eil_water))+
+  geom_bar(colour="black") +
+  geom_text(stat='count',aes(label=..count..),vjust=-1, size = 3) +
+  scale_x_discrete(breaks = 1:31)+
+  theme(legend.position="bottom" ) +
+  facet_wrap(~year,ncol = 4) +
+  labs(fill = "") + xlab("")
+dev.off()
+
+
+
+#trendlines
+sewage.count <- count(sewage.incidents, year, eil_water)
+png(filename = "T:/Proposals/WWF Polution & Chalk Streams/output plot/sewage incidents by year (trendline).png",width=1920,height=1080,res=150)
+ggplot(sewage.count, aes(year, n,  fill = eil_water)) + geom_line(aes(color = eil_water))+ 
+  xlab("") + ylab("Count") + theme(legend.position = "bottom") + labs(fill = "")
+dev.off()
+
+sewage.region <- count(sewage.incidents, year, region_wm, eil_water)
+png(filename = "T:/Proposals/WWF Polution & Chalk Streams/output plot/sewage incidents by year (trendline by region).png",width=1920,height=1080,res=150)
+ggplot(sewage.region, aes(year, n,  fill = eil_water)) + geom_line(aes(color = eil_water))+ facet_wrap(~region_wm)
+  xlab("") + ylab("Count") + theme(legend.position = "bottom") + labs(fill = "")
+dev.off()
